@@ -18,8 +18,37 @@ OUTCOMES = ("correct", "correctWithHints", "correctRetry", "failed")
 CORRECT = {"correct", "correctWithHints"}  # 正答＝1回目の解答で正解（ヒント使用は可）
 MARKS = ("◎", "〇", "△", "×")  # 復習の必要度（◎＝低い 〜 ×＝高い）
 STAGES = ("none", "reading", "approach", "execution", "verification")
-ERRORS = ("計算ミス", "公式の未定着", "公式の誤適用", "単位の取り違え", "概念の誤解")
+ERRORS = ("計算ミス", "公式の未定着", "公式の誤適用", "単位の取り違え", "条件の取り違え", "概念の誤解")
 JST = timezone(timedelta(hours=9))
+
+
+def validate(rec: dict, complete: bool = False) -> None:
+    """旧台帳は任意の評価を許す。新しい記録は診断項目を必須にする。"""
+    if not isinstance(rec, dict):
+        raise ValueError("記録はオブジェクトにしてください")
+    for key in ("at", "subject", "unit", "problem_id", "outcome"):
+        if not isinstance(rec.get(key), str) or not rec[key].strip():
+            raise ValueError(f"{key} は空でない文字列が必要です")
+    try:
+        stamp = datetime.fromisoformat(rec["at"])
+    except ValueError:
+        raise ValueError("at は ISO 8601 日時が必要です") from None
+    if stamp.utcoffset() is None:
+        raise ValueError("at にはタイムゾーンが必要です")
+    for key, vocab in (("outcome", OUTCOMES), ("teacher_eval", MARKS),
+                       ("self_eval", MARKS), ("stumble", STAGES), ("error_category", ERRORS)):
+        if key in rec and rec[key] not in vocab:
+            raise ValueError(f"{key} の値が不正: {rec[key]!r}")
+    if complete:
+        for key in ("teacher_eval", "self_eval", "stumble"):
+            if key not in rec:
+                raise ValueError(f"{key} が必要です。自己評価は本人の回答を待ってください")
+        if rec["outcome"] != "correct" and rec["stumble"] == "none":
+            raise ValueError("ヒント・再解答・未達では躓いた段が必要です")
+        if rec["stumble"] != "none" and "error_category" not in rec:
+            raise ValueError("躓きがある場合は error_category が必要です")
+        if rec["stumble"] == "none" and "error_category" in rec:
+            raise ValueError("躓きなしの記録に error_category は付けられません")
 
 
 def load(path: Path) -> list[dict]:
@@ -29,13 +58,24 @@ def load(path: Path) -> list[dict]:
         if not line.strip():
             continue
         try:
-            rows.append(json.loads(line))
-        except json.JSONDecodeError as exc:
-            sys.exit(f"{path}:{no} が JSON として読めない: {exc}")
+            rec = json.loads(line)
+            validate(rec)
+            rows.append(rec)
+        except ValueError as exc:
+            sys.exit(f"{path}:{no}: {exc}")
     return rows
 
 
 def append(path: Path, rec: dict) -> None:
+    validate(rec, complete=True)
+    if path.exists():
+        load(path)  # 壊れた台帳への追記で被害を広げない
+        if path.stat().st_size:
+            with path.open("rb") as f:
+                f.seek(-1, 2)
+                if f.read(1) != b"\n":
+                    raise ValueError("台帳末尾に改行がありません。追記前に確認してください")
+    path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("a", encoding="utf-8") as f:
         f.write(json.dumps(rec, ensure_ascii=False) + "\n")
 
@@ -53,6 +93,10 @@ def make_record(a: argparse.Namespace) -> dict:
     for name, val, _ in checks[1:]:
         if val is not None:
             rec[name] = val
+    try:
+        validate(rec, complete=True)
+    except ValueError as exc:
+        sys.exit(str(exc))
     return rec
 
 
@@ -75,15 +119,21 @@ def suggest_level(rows: list[dict]) -> str:
 
 def report(rows: list[dict]) -> str:
     out = [f"記録 {len(rows)}問 / 全体の正答率 {accuracy(rows):.0%}", "", "単元別:"]
-    for unit in dict.fromkeys(r["unit"] for r in rows):
-        sub = [r for r in rows if r["unit"] == unit]
-        out.append(f"  {unit}: {len(sub)}問, 正答率 {accuracy(sub):.0%}")
-    out += ["", "レベル提案: " + suggest_level(rows)]
+    for subject, unit in dict.fromkeys((r["subject"], r["unit"]) for r in rows):
+        sub = [r for r in rows if r["subject"] == subject and r["unit"] == unit]
+        independent = sum(r["outcome"] == "correct" for r in sub) / len(sub)
+        out.append(f"  {subject}/{unit}: {len(sub)}問, 正答率 {accuracy(sub):.0%}"
+                   f", 自力正答率 {independent:.0%}; レベル提案: {suggest_level(sub)}")
+    out += ["", "※正答率はヒント使用を含む。レベル提案は科目・単元ごとの直近10問。自動変更ではありません。"]
     return "\n".join(out)
 
 
 def diagnose(rows: list[dict]) -> str:
     out = ["躓いた段（最初に落ちた段）:"]
+    missing = sum(any(k not in r for k in ("teacher_eval", "self_eval", "stumble"))
+                  or (r.get("stumble", "none") != "none" and "error_category" not in r)
+                  for r in rows)
+    out.insert(0, f"診断項目が不足した旧記録: {missing}問（未記録を問題なしとは扱わない）")
     stages = Counter(r["stumble"] for r in rows if "stumble" in r)
     out += [f"  {s}: {stages[s]}件" for s in STAGES if stages[s]] or ["  記録なし"]
     out += ["", "誤答の種類:"]
@@ -111,8 +161,9 @@ def main(argv=None) -> None:
         if name == "add":
             for k in ("subject", "unit", "problem-id", "outcome"):
                 p.add_argument(f"--{k}", required=True)
-            for k in ("teacher-eval", "self-eval", "stumble", "error-category"):
-                p.add_argument(f"--{k}")
+            for k in ("teacher-eval", "self-eval", "stumble"):
+                p.add_argument(f"--{k}", required=True)
+            p.add_argument("--error-category")
     a = ap.parse_args(argv)
     if a.cmd == "add":
         append(a.ledger, make_record(a))
