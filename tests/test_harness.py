@@ -14,7 +14,7 @@ from select_candidates import candidates
 
 def record(**changes):
     rec = dict(at="2026-10-24T10:00:00+09:00", subject="math", unit="数列",
-               problem_id="a", outcome="correct", teacher_eval="◎", self_eval="◎", stumble="none")
+               problem_id="a", outcome="correct", teacher_eval="◎", self_eval="◎", stumble="none", hints=0)
     rec.update(changes)
     return rec
 
@@ -65,7 +65,7 @@ class IntegrityTest(unittest.TestCase):
         self.assertIn("不足した旧記録: 1問", ledger.diagnose([record(stumble="execution")]))
 
     def test_condition_error_has_its_own_category(self):
-        rec = record(outcome="failed", stumble="reading", error_category="条件の取り違え")
+        rec = record(outcome="failed", teacher_eval="×", stumble="reading", error_category="条件の取り違え")
         ledger.validate(rec, complete=True)
         self.assertIn("条件の取り違え: 1件", ledger.diagnose([rec]))
 
@@ -82,7 +82,7 @@ class IntegrityTest(unittest.TestCase):
         rows = [record(outcome="failed", subject="physics") for _ in range(5)]
         rows += [record(unit="微分") for _ in range(5)]
         report = ledger.report(rows)
-        self.assertEqual(report.count("判定なし（5問"), 2)
+        self.assertEqual(report.count("判定なし（5回"), 2)
         self.assertIn("自力正答率", report)
 
 
@@ -105,7 +105,7 @@ class SessionTest(unittest.TestCase):
                      "--subject", "math", "--unit", "数列")
 
     def finish(self, outcome="correct", **extra):
-        args = ["finish", "--outcome", outcome, "--teacher-eval", "◎", "--self-eval", "〇",
+        args = ["finish", "--outcome", outcome, "--teacher-eval", "◎" if outcome == "correct" else "△", "--self-eval", "〇",
                 "--stumble", extra.pop("stumble", "none")]
         if "error" in extra:
             args += ["--error-category", extra["error"]]

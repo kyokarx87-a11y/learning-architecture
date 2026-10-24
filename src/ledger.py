@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """演習台帳（JSON Lines）の記録と集計。標準ライブラリのみ。
 
-    python ledger.py add --ledger L.jsonl --subject math --unit 数列 --problem-id P1 --outcome correct
+    記録は session.py finish から行う（直接 add は廃止）。
     python ledger.py report   --ledger L.jsonl   # 単元別の件数・正答率と、直近10問によるレベル提案
     python ledger.py diagnose --ledger L.jsonl   # 躓いた段・誤答の種類・自己評価と教師評価のずれ
 """
@@ -39,8 +39,12 @@ def validate(rec: dict, complete: bool = False) -> None:
                        ("self_eval", MARKS), ("stumble", STAGES), ("error_category", ERRORS)):
         if key in rec and rec[key] not in vocab:
             raise ValueError(f"{key} の値が不正: {rec[key]!r}")
+    if "attempt_id" in rec and (not isinstance(rec["attempt_id"], str) or not rec["attempt_id"].strip()):
+        raise ValueError("attempt_id は空でない文字列が必要です")
+    if "hints" in rec and (type(rec["hints"]) is not int or not 0 <= rec["hints"] <= 3):
+        raise ValueError("hints は0〜3の整数が必要です")
     if complete:
-        for key in ("teacher_eval", "self_eval", "stumble"):
+        for key in ("teacher_eval", "self_eval", "stumble", "hints"):
             if key not in rec:
                 raise ValueError(f"{key} が必要です。自己評価は本人の回答を待ってください")
         if rec["outcome"] != "correct" and rec["stumble"] == "none":
@@ -49,17 +53,34 @@ def validate(rec: dict, complete: bool = False) -> None:
             raise ValueError("躓きがある場合は error_category が必要です")
         if rec["stumble"] == "none" and "error_category" in rec:
             raise ValueError("躓きなしの記録に error_category は付けられません")
+        if rec["outcome"] == "correct":
+            if rec["hints"] or rec["stumble"] != "none" or rec["teacher_eval"] == "×":
+                raise ValueError("correct はヒント0回・躓きなし・教師評価×以外が必要です")
+        elif rec["teacher_eval"] == "◎":
+            raise ValueError("教師評価◎はヒントなしの初回自力正解に限ります")
+        if rec["outcome"] == "correctWithHints" and not rec["hints"]:
+            raise ValueError("correctWithHints はヒント1〜3回が必要です")
+        if rec["outcome"] == "failed" and rec["teacher_eval"] != "×":
+            raise ValueError("未達の failed は教師評価×が必要です")
+        if rec["hints"] >= 2 and rec["teacher_eval"] == "〇":
+            raise ValueError("複数回のヒント使用は教師評価△または×が必要です")
 
 
 def load(path: Path) -> list[dict]:
     """台帳を読む。壊れた行は黙って捨てず、行番号付きで報告して落とす。"""
     rows = []
+    attempts = set()
     for no, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
         if not line.strip():
             continue
         try:
             rec = json.loads(line)
             validate(rec)
+            attempt_id = rec.get("attempt_id")
+            if attempt_id is not None:
+                if attempt_id in attempts:
+                    raise ValueError(f"attempt_id が重複しています: {attempt_id}")
+                attempts.add(attempt_id)
             rows.append(rec)
         except ValueError as exc:
             sys.exit(f"{path}:{no}: {exc}")
@@ -69,7 +90,9 @@ def load(path: Path) -> list[dict]:
 def append(path: Path, rec: dict) -> None:
     validate(rec, complete=True)
     if path.exists():
-        load(path)  # 壊れた台帳への追記で被害を広げない
+        rows = load(path)  # 壊れた台帳への追記で被害を広げない
+        if rec.get("attempt_id") is not None and any(r.get("attempt_id") == rec["attempt_id"] for r in rows):
+            raise ValueError("同じ attempt_id の二重追記はできません")
         if path.stat().st_size:
             with path.open("rb") as f:
                 f.seek(-1, 2)
@@ -80,7 +103,7 @@ def append(path: Path, rec: dict) -> None:
         f.write(json.dumps(rec, ensure_ascii=False) + "\n")
 
 
-def make_record(a: argparse.Namespace) -> dict:
+def make_record(a: argparse.Namespace, hints: int) -> dict:
     """引数を検査して記録を作る。語彙の外の値は推測で通さず拒否する（Fail Loud）。"""
     checks = [("outcome", a.outcome, OUTCOMES), ("teacher_eval", a.teacher_eval, MARKS),
               ("self_eval", a.self_eval, MARKS), ("stumble", a.stumble, STAGES),
@@ -89,7 +112,7 @@ def make_record(a: argparse.Namespace) -> dict:
         if val is not None and val not in vocab:
             sys.exit(f"{name} の値が不正: {val!r}（使える値: {', '.join(vocab)}）")
     rec = {"at": datetime.now(JST).isoformat(timespec="seconds"), "subject": a.subject,
-           "unit": a.unit, "problem_id": a.problem_id, "outcome": a.outcome}
+           "unit": a.unit, "problem_id": a.problem_id, "outcome": a.outcome, "hints": hints}
     for name, val, _ in checks[1:]:
         if val is not None:
             rec[name] = val
@@ -105,9 +128,9 @@ def accuracy(rows: list[dict]) -> float:
 
 
 def suggest_level(rows: list[dict]) -> str:
-    """直近10問の正答率から、レベル調整の提案を返す。10問未満なら判定しない。"""
+    """直近10演習回の正答率から提案する。再演習を含む。10回未満なら判定しない。"""
     if len(rows) < 10:
-        return f"判定なし（{len(rows)}問。10問たまるまで判定しない）"
+        return f"判定なし（{len(rows)}回。10回たまるまで判定しない）"
     acc = accuracy(rows[-10:])
     if acc == 0:
         return "1学年落とす（正答率0%）"
@@ -118,13 +141,24 @@ def suggest_level(rows: list[dict]) -> str:
 
 
 def report(rows: list[dict]) -> str:
-    out = [f"記録 {len(rows)}問 / 全体の正答率 {accuracy(rows):.0%}", "", "単元別:"]
+    first, latest = {}, {}
+    for rec in rows:
+        key = (rec["subject"], rec["unit"], rec["problem_id"])
+        first.setdefault(key, rec)
+        latest[key] = rec
+    out = [f"演習 {len(rows)}回 / 異なる問題 {len(first)}問 / 演習回ごとの正答率 {accuracy(rows):.0%}",
+           f"問題別の初回正答率 {accuracy(list(first.values())):.0%}"
+           f" / 最新正答率 {accuracy(list(latest.values())):.0%}", "", "単元別:"]
     for subject, unit in dict.fromkeys((r["subject"], r["unit"]) for r in rows):
         sub = [r for r in rows if r["subject"] == subject and r["unit"] == unit]
         independent = sum(r["outcome"] == "correct" for r in sub) / len(sub)
-        out.append(f"  {subject}/{unit}: {len(sub)}問, 正答率 {accuracy(sub):.0%}"
+        first_sub = [r for r in first.values() if r["subject"] == subject and r["unit"] == unit]
+        latest_sub = [r for r in latest.values() if r["subject"] == subject and r["unit"] == unit]
+        out.append(f"  {subject}/{unit}: 演習 {len(sub)}回 / 異なる問題 {len(first_sub)}問, 演習回ごとの正答率 {accuracy(sub):.0%}"
+                   f", 初回正答率 {accuracy(first_sub):.0%}, 最新正答率 {accuracy(latest_sub):.0%}"
                    f", 自力正答率 {independent:.0%}; レベル提案: {suggest_level(sub)}")
-    out += ["", "※正答率はヒント使用を含む。レベル提案は科目・単元ごとの直近10問。自動変更ではありません。"]
+    out += ["", "※正答率はヒント使用を含む。初回・最新は科目/単元/問題IDごと。"
+            "レベル提案は科目・単元ごとの直近10演習回（再演習を含む）。自動変更ではありません。"]
     return "\n".join(out)
 
 
@@ -166,7 +200,7 @@ def main(argv=None) -> None:
             p.add_argument("--error-category")
     a = ap.parse_args(argv)
     if a.cmd == "add":
-        append(a.ledger, make_record(a))
+        ap.exit(2, "ledger.py add は廃止しました。session.py start → finish で記録してください。\n")
     else:
         sys.stdout.reconfigure(encoding="utf-8")
         print((report if a.cmd == "report" else diagnose)(load(a.ledger)))
