@@ -15,7 +15,7 @@
 | AIが答えをすぐ教えてしまい、自力で考える時間が減る | 出題→回答→ヒント（最大3回）→解答、の順を固定（[docs/practice-loop.md](docs/practice-loop.md)） |
 | 「できたつもり」と実際のズレに気づけない | 自己評価と教師評価を別々に記録し、ずれを診断に使う（[docs/evaluation.md](docs/evaluation.md)） |
 | 正解／不正解だけでは弱点が分からない | 「どの段で躓いたか」「誤答の種類」を台帳に残して集計する |
-| AIが決めたルールを守らなくなる | ルールを文章に頼らず、記録の抜けを検出するスクリプトで構造的に守らせる（[docs/design-principles.md](docs/design-principles.md)） |
+| AIが決めたルールを守らなくなる | 共通CLIで開始した問題の未記録・評価矛盾を検出する（[docs/design-principles.md](docs/design-principles.md)）。会話や直接のファイル編集まで強制するものではありません |
 
 ## 中身
 
@@ -37,12 +37,15 @@ python src/select_candidates.py --ledger data/sample_ledger.jsonl --pool data/sa
 python -m unittest discover -s tests
 ```
 
-自分の記録を付けるときは、1問ごとに追記します。
+記録は演習の開始から1問ずつ行います。科目・単元専用の問題ID一覧を用意し、
+出題・解答・自己評価待ちを含む[演習手順](docs/agent-workflow.md)に従ってください。
 
 ```bash
-python src/ledger.py add --ledger my_ledger.jsonl --subject math --unit 数列 --problem-id demo_001 \
-  --outcome correctWithHints --teacher-eval 〇 --self-eval ◎ --stumble execution --error-category 計算ミス
+python src/session.py start --pool local/pool.txt --subject math --unit 数列
 ```
+
+`ledger.py add`は廃止しました。進行中のヒント数を知らずに記録できる経路をなくすため、
+公式CLIの追記入口は`session.py finish`だけです。既存台帳のreport / diagnoseは引き続き使えます。
 
 ## 含めていないもの
 
@@ -58,7 +61,8 @@ python src/ledger.py add --ledger my_ledger.jsonl --subject math --unit 数列 -
 サンプルIDだけから教材を取得する機能はありません。
 
 `session.py`は、未記録の問題がある間の次の出題開始、4回目のヒント、
-自己評価などの不足した記録を拒否します。記録はGit追跡外の`local/`に置きます。
+自己評価などの不足した記録、ヒント数・正誤・教師評価・躓きの矛盾を拒否します。
+記録はGit追跡外の`local/`に置きます。
 AIがこのCLIを呼ぶことは手順に依存し、回答・採点の意味内容を強制するフックはありません。
 
 ## 評価と限界
@@ -67,6 +71,7 @@ AIがこのCLIを呼ぶことは手順に依存し、回答・採点の意味内
 一方、公開データは架空であり、成績改善を証明する実験データではありません。
 レベル変更は科目・単元ごとの**提案**までで、昇段や復習日程の自動化は未実装です。
 ヒント込み正答率だけでなく、自力正答率・日を空けた再演習・未見問題で定着を確認します。
+reportは演習回数と異なる問題数、問題別の初回正答率と最新正答率を分けて表示します。
 コードを評価して改善した内容は[公開版の評価記録](docs/harness-review.md)にまとめています。
 
 ## ライセンス
