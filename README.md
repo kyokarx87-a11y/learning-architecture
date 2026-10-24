@@ -1,0 +1,54 @@
+# learning-architecture
+
+**学習の設計（Learning Architecture）** — AIエージェントを家庭教師にして、数学・物理の問題演習を回すための
+「ルール・記録・診断」の仕組みの見本版です。高校3年の受験勉強の中で作り、使いながら直してきました。
+
+> This is a showcase of a study system built around an AI tutor agent: a practice loop, a two-axis
+> evaluation record (self vs. teacher), and a ledger that diagnoses *where* understanding stops.
+> Sample data is fictional. Textbook content and personal records are intentionally excluded.
+
+## 何を解決しようとしたか
+
+| 困りごと | 仕組み |
+|---|---|
+| AIが答えをすぐ教えてしまい、自力で考える時間が減る | 出題→回答→ヒント（最大3回）→解答、の順を固定（[docs/practice-loop.md](docs/practice-loop.md)） |
+| 「できたつもり」と実際のズレに気づけない | 自己評価と教師評価を別々に記録し、ずれを診断に使う（[docs/evaluation.md](docs/evaluation.md)） |
+| 正解／不正解だけでは弱点が分からない | 「どの段で躓いたか」「誤答の種類」を台帳に残して集計する |
+| AIが決めたルールを守らなくなる | ルールを文章に頼らず、記録の抜けを検出するスクリプトで構造的に守らせる（[docs/design-principles.md](docs/design-principles.md)） |
+
+## 中身
+
+```
+docs/    仕組みの説明（演習ループ・評価・設計の原則）
+src/     台帳への記録と集計（ledger.py）／出題候補の絞り込み（select_candidates.py）
+data/    架空のサンプル台帳
+tests/   動作確認（unittest）
+```
+
+## 動かしてみる
+
+Python 3.9 以上が必要です（標準ライブラリのみ）。
+
+```bash
+python src/ledger.py report --ledger data/sample_ledger.jsonl
+python src/ledger.py diagnose --ledger data/sample_ledger.jsonl
+python src/select_candidates.py --ledger data/sample_ledger.jsonl --pool data/sample_pool.txt --unit 数列 --count 3
+python -m unittest discover -s tests
+```
+
+自分の記録を付けるときは、1問ごとに追記します。
+
+```bash
+python src/ledger.py add --ledger my_ledger.jsonl --subject math --unit 数列 --problem-id demo_001 \
+  --outcome correctWithHints --teacher-eval 〇 --self-eval ◎ --stumble execution --error-category 計算ミス
+```
+
+## 含めていないもの
+
+- 教材（問題集・参考書・過去問）の本文や図：著作権があるため含めません。
+- 実際の学習記録・個人情報・認証情報。サンプルはすべて架空です。
+- 本番運用ではほかにも、問題データベース、記録漏れを止めるフック、複数PC同期などがあります。ここでは考え方が伝わる最小限だけを載せました。
+
+## ライセンス
+
+MIT（[LICENSE](LICENSE)）

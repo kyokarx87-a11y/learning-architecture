@@ -1,0 +1,12 @@
+{"at": "2026-09-01T20:00:00+09:00", "subject": "math", "unit": "数列", "problem_id": "demo_001", "outcome": "correct", "teacher_eval": "◎", "self_eval": "◎", "stumble": "none"}
+{"at": "2026-09-01T20:10:00+09:00", "subject": "math", "unit": "数列", "problem_id": "demo_002", "outcome": "correctWithHints", "teacher_eval": "〇", "self_eval": "◎", "stumble": "execution", "error_category": "計算ミス"}
+{"at": "2026-09-02T20:00:00+09:00", "subject": "math", "unit": "数列", "problem_id": "demo_003", "outcome": "failed", "teacher_eval": "×", "self_eval": "△", "stumble": "approach", "error_category": "公式の未定着"}
+{"at": "2026-09-02T20:10:00+09:00", "subject": "math", "unit": "数列", "problem_id": "demo_004", "outcome": "correct", "teacher_eval": "◎", "self_eval": "〇", "stumble": "none"}
+{"at": "2026-09-03T20:00:00+09:00", "subject": "math", "unit": "数列", "problem_id": "demo_005", "outcome": "correctWithHints", "teacher_eval": "△", "self_eval": "◎", "stumble": "execution", "error_category": "公式の誤適用"}
+{"at": "2026-09-03T20:10:00+09:00", "subject": "math", "unit": "数列", "problem_id": "demo_006", "outcome": "correct", "teacher_eval": "◎", "self_eval": "◎", "stumble": "none"}
+{"at": "2026-09-04T20:00:00+09:00", "subject": "math", "unit": "微分", "problem_id": "demo_007", "outcome": "failed", "teacher_eval": "×", "self_eval": "×", "stumble": "approach", "error_category": "概念の誤解"}
+{"at": "2026-09-04T20:10:00+09:00", "subject": "math", "unit": "微分", "problem_id": "demo_008", "outcome": "correctWithHints", "teacher_eval": "△", "self_eval": "△", "stumble": "verification", "error_category": "単位の取り違え"}
+{"at": "2026-09-05T20:00:00+09:00", "subject": "math", "unit": "微分", "problem_id": "demo_009", "outcome": "correct", "teacher_eval": "〇", "self_eval": "〇", "stumble": "none"}
+{"at": "2026-09-05T20:10:00+09:00", "subject": "math", "unit": "微分", "problem_id": "demo_010", "outcome": "correct", "teacher_eval": "◎", "self_eval": "◎", "stumble": "none"}
+{"at": "2026-09-06T20:00:00+09:00", "subject": "math", "unit": "微分", "problem_id": "demo_011", "outcome": "correctRetry", "teacher_eval": "△", "self_eval": "〇", "stumble": "execution", "error_category": "計算ミス"}
+{"at": "2026-09-06T20:10:00+09:00", "subject": "math", "unit": "微分", "problem_id": "demo_012", "outcome": "correct", "teacher_eval": "◎", "self_eval": "〇", "stumble": "none"}
