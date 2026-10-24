@@ -33,13 +33,15 @@ class RecordTest(unittest.TestCase):
     def test_invalid_value_is_rejected(self):
         with tempfile.TemporaryDirectory() as d, self.assertRaises(SystemExit):
             ledger.main(["add", "--ledger", str(Path(d) / "l.jsonl"), "--subject", "math",
-                         "--unit", "u", "--problem-id", "p", "--outcome", "maybe"])
+                         "--unit", "u", "--problem-id", "p", "--outcome", "maybe",
+                         "--teacher-eval", "◎", "--self-eval", "◎", "--stumble", "none"])
 
     def test_add_and_load(self):
         with tempfile.TemporaryDirectory() as d:
             path = Path(d) / "l.jsonl"
             ledger.main(["add", "--ledger", str(path), "--subject", "math", "--unit", "u",
-                         "--problem-id", "p", "--outcome", "correct", "--self-eval", "◎"])
+                         "--problem-id", "p", "--outcome", "correct", "--self-eval", "◎",
+                         "--teacher-eval", "◎", "--stumble", "none"])
             self.assertEqual(ledger.load(path)[0]["self_eval"], "◎")
 
 
