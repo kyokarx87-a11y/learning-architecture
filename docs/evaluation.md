@@ -29,8 +29,14 @@
 | `outcome` | `correct` / `correctWithHints` / `correctRetry` / `failed`（レベル調整はこれだけを使う） |
 | `teacher_eval`, `self_eval` | ◎〇△× |
 | `stumble` | 最初に落ちた段：`reading`（読み取り）/ `approach`（方針）/ `execution`（実行）/ `verification`（検算）/ `none` |
-| `error_category` | 計算ミス／公式の未定着／公式の誤適用／単位・条件の取り違え／概念の誤解 |
+| `error_category` | 計算ミス／公式の未定着／公式の誤適用／単位の取り違え／条件の取り違え／概念の誤解 |
 
 - **評価の記号は、レベルの自動調整には使わない。** 調整は `outcome` だけで決める。
 - **躓いた段は、最上流の1つだけを記録する。** 上流を直さないと下流のミスは再発するため。
 - 「公式の未定着」（思い出せない）と「公式の誤適用」（思い出せたが当てはめを誤る）は、打ち手が違う（前者は暗記、後者は適用練習）ので分ける。
+
+新規の追記は `teacher_eval`・`self_eval`・`stumble` を必須とします。
+`stumble` が `none` 以外なら `error_category` も必須です。
+分類のCLI語彙は `src/ledger.py` の `ERRORS` が正典です。単位と条件の取り違えを分けます。
+旧台帳の評価欠損は読み取り可能ですが、診断で不足件数を表示します。
+自己評価は本人の回答後に記録し、未回答を記号で補完しません。
