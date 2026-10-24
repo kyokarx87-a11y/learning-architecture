@@ -36,13 +36,15 @@ class RecordTest(unittest.TestCase):
                          "--unit", "u", "--problem-id", "p", "--outcome", "maybe",
                          "--teacher-eval", "◎", "--self-eval", "◎", "--stumble", "none"])
 
-    def test_add_and_load(self):
+    def test_direct_add_without_session_is_also_retired(self):
         with tempfile.TemporaryDirectory() as d:
             path = Path(d) / "l.jsonl"
-            ledger.main(["add", "--ledger", str(path), "--subject", "math", "--unit", "u",
-                         "--problem-id", "p", "--outcome", "correct", "--self-eval", "◎",
-                         "--teacher-eval", "◎", "--stumble", "none"])
-            self.assertEqual(ledger.load(path)[0]["self_eval"], "◎")
+            with self.assertRaises(SystemExit) as raised:
+                ledger.main(["add", "--ledger", str(path), "--subject", "math", "--unit", "u",
+                             "--problem-id", "p", "--outcome", "correct", "--self-eval", "◎",
+                             "--teacher-eval", "◎", "--stumble", "none"])
+            self.assertEqual(raised.exception.code, 2)
+            self.assertFalse(path.exists())
 
 
 class SelectTest(unittest.TestCase):

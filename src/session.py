@@ -96,7 +96,7 @@ def main(argv=None) -> None:
                     raise ValueError("correctWithHints には hint の記録が必要です")
                 for key in ("subject", "unit", "problem_id"):
                     setattr(a, key, state[key])
-                rec = make_record(a)
+                rec = make_record(a, hints=state["hints"])
                 rec.update(attempt_id=state["attempt_id"], hints=state["hints"])
                 append(Path(state["ledger"]), rec)
                 write_state(a.state, {})
